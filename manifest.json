@@ -1,0 +1,9 @@
+{
+  "name": "お金の流れトレーニング",
+  "short_name": "お金の流れ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#ffffff",
+  "orientation": "portrait"
+}

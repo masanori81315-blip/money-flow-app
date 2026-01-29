@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>お金の流れトレーニング</title>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 16px;
+  background: #fafafa;
+}
+h1 {
+  text-align: center;
+  font-size: 20px;
+}
+.card {
+  background: #fff;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.metrics p {
+  margin: 6px 0;
+  font-size: 15px;
+}
+.metrics span {
+  font-weight: bold;
+}
+.buttons button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  font-size: 15px;
+}
+input, textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  font-size: 14px;
+}
+.log-item {
+  border-bottom: 1px solid #eee;
+  padding: 6px 0;
+  font-size: 14px;
+}
+small {
+  color: #666;
+}
+</style>
+</head>
+
+<body>
+
+<h1>お金の流れトレーニング</h1>
+
+<!-- 現在地 -->
+<div class="card metrics">
+  <p>キャッシュフロー：<span id="cashflow">0</span> 円</p>
+  <p>純資産：<span id="networth">0</span> 円</p>
+  <p>資産収入比率：<span id="ratio">0</span> %</p>
+  <small>100%＝経済的自立ライン</small>
+
+  <hr>
+
+  <p>投資累計：<span id="totalInvest">0</span> 円</p>
+  <p>投資効率（参考）：<span id="efficiency">0</span></p>
+</div>
+
+<!-- 判断入力 -->
+<div class="card">
+  <div class="buttons">
+    <button onclick="setType('income')">収入</button>
+    <button onclick="setType('expense')">支出</button>
+    <button onclick="setType('asset_buy')">資産を買う</button>
+    <button onclick="setType('asset_sell')">資産を売る</button>
+    <button onclick="setType('liability_buy')">負債を増やす</button>
+    <button onclick="setType('liability_sell')">負債を減らす</button>
+  </div>
+
+  <div id="expenseDetail" style="display:none;">
+    <small>これはどれ？</small>
+    <button onclick="setExpense('consumption')">消費</button>
+    <button onclick="setExpense('investment')">投資</button>
+    <button onclick="setExpense('waste')">浪費</button>
+  </div>
+
+  <input type="number" id="amount" placeholder="金額（円）">
+  <textarea id="memo" placeholder="これは何？（自分の認識を書く）"></textarea>
+  <button onclick="addRecord()">記録する</button>
+</div>
+
+<!-- 履歴 -->
+<div class="card">
+  <h3>判断の履歴</h3>
+  <div id="log"></div>
+</div>
+
+<script>
+let records = JSON.parse(localStorage.getItem("records")) || [];
+let currentType = null;
+let expenseKind = null;
+
+function setType(type) {
+  currentType = type;
+  expenseKind = null;
+  document.getElementById("expenseDetail").style.display =
+    type === "expense" ? "block" : "none";
+}
+
+function setExpense(kind) {
+  expenseKind = kind;
+}
+
+function addRecord() {
+  const amount = Number(document.getElementById("amount").value);
+  const memo = document.getElementById("memo").value;
+  if (!currentType || !amount) return;
+  if (currentType === "expense" && !expenseKind) return;
+
+  records.push({
+    type: currentType,
+    expenseKind: expenseKind,
+    amount: amount,
+    memo: memo,
+    date: new Date().toLocaleDateString()
+  });
+
+  localStorage.setItem("records", JSON.stringify(records));
+  document.getElementById("amount").value = "";
+  document.getElementById("memo").value = "";
+  render();
+}
+
+function render() {
+  let cashflow = 0;
+  let assets = 0;
+  let liabilities = 0;
+  let assetIncome = 0;
+  let totalInvestment = 0;
+
+  const log = document.getElementById("log");
+  log.innerHTML = "";
+
+  records.forEach(r => {
+    if (r.type === "income") cashflow += r.amount;
+    if (r.type === "expense") {
+      cashflow -= r.amount;
+      if (r.expenseKind === "investment") {
+        assets += r.amount;
+        totalInvestment += r.amount;
+      }
+    }
+    if (r.type === "asset_buy") {
+      cashflow -= r.amount;
+      assets += r.amount;
+      totalInvestment += r.amount;
+    }
+    if (r.type === "asset_sell") {
+      cashflow += r.amount;
+      assets -= r.amount;
+      assetIncome += r.amount;
+    }
+    if (r.type === "liability_buy") {
+      cashflow -= r.amount;
+      liabilities += r.amount;
+    }
+    if (r.type === "liability_sell") {
+      cashflow += r.amount;
+      liabilities -= r.amount;
+    }
+
+    const div = document.createElement("div");
+    div.className = "log-item";
+    div.textContent =
+      `${r.date}｜${label(r)}｜${sign(r)}${r.amount}円｜${r.memo}`;
+    log.prepend(div);
+  });
+
+  document.getElementById("cashflow").textContent = cashflow;
+  document.getElementById("networth").textContent = assets - liabilities;
+  document.getElementById("ratio").textContent =
+    cashflow !== 0 ? Math.round((assetIncome / cashflow) * 100) : 0;
+  document.getElementById("totalInvest").textContent = totalInvestment;
+  document.getElementById("efficiency").textContent =
+    totalInvestment > 0 ? (assets / totalInvestment).toFixed(2) : 0;
+}
+
+function label(r) {
+  if (r.type === "expense") {
+    return {
+      consumption: "消費",
+      investment: "投資",
+      waste: "浪費"
+    }[r.expenseKind];
+  }
+  return {
+    income: "収入",
+    asset_buy: "資産を買う",
+    asset_sell: "資産を売る",
+    liability_buy: "負債を増やす",
+    liability_sell: "負債を減らす"
+  }[r.type];
+}
+
+function sign(r) {
+  return (r.type === "income" || r.type === "asset_sell" || r.type === "liability_sell")
+    ? "+"
+    : "-";
+}
+
+render();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js");
+  }
+</script>
+
+</body>
+</html>
